@@ -1,6 +1,7 @@
 import os
 import random
 import logging
+from time import sleep
 
 logging.getLogger(__name__)
 
@@ -10,7 +11,7 @@ class GeneratorForTfData:
 
     Implicitely assumes several porperties, such as self.list :(
     Subclass must implement create_list(), provide_data(el), and call super(
-    ).__init__(is_training) and the end of its __init__()
+    ).__init__(is_training) at the end of its __init__()
     """
 
     def __init__(self, is_training):
@@ -22,7 +23,7 @@ class GeneratorForTfData:
         return self
 
     def __call__(self, *args, **kwargs):
-        # Because tf.data.Dataset.from_generator expects a callable object
+        # Because tf.data1.Dataset.from_generator expects a callable object
         return self.__iter__()
 
     def __next__(self):
@@ -68,20 +69,18 @@ class GeneratorFromFileList(GeneratorForTfData):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    datagen = GeneratorFromFileList('data/test', False)
+    class myGen(GeneratorFromFileList):
+        def provide_data(self, file):
+            return file
+    datagen = myGen('data/test', True)
     import tensorflow as tf
-    ds = tf.data.Dataset.from_generator(datagen, tf.float32)
+    ds = tf.data.Dataset.from_generator(datagen, tf.string)
     it = ds.make_one_shot_iterator()
     el = it.get_next()
     s = tf.Session()
     while True:
         try:
             print(s.run(el))
-        except:
-            break
-
-    while True:
-        try:
-            print(s.run(el))
+            sleep(1)
         except:
             break

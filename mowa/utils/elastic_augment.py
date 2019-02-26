@@ -3,6 +3,7 @@ import random
 
 import numpy as np
 import augment
+from scipy.ndimage.morphology import grey_dilation
 
 
 def create_elastic_transformation(shape, control_point_spacing,
@@ -36,8 +37,8 @@ def _subtract_tuple(a, b):
     return tuple([i-j for i, j in zip(a, b)])
 
 
-def apply_transformation_to_point(location, transformation):
-    """applies a created transformation to a point with [x, y, z] data
+def apply_transformation_to_point_deprecated(location, transformation):
+    """applies a created transformation to a point with [x, y, z] data1
 
     code from: [https://github.com/funkey/gunpowder/blob/master/gunpowder/nodes/elastic_augment.py]
     """
@@ -96,18 +97,24 @@ def apply_transformation_to_point(location, transformation):
 def apply_transformation_to_points_with_transforming_to_volume(
         nuclei_centerpoints, transformation):
     cp_volume = np.zeros((1166, 140, 140))
-
-    for i, p in enumerate(nuclei_centerpoints):
-        cp_volume[tuple(int(round(loc)) for loc in p)] = i+1
+    valid_nuclei = [i for i, p in enumerate(nuclei_centerpoints) if any(
+        p!=0)]
+    for i in valid_nuclei:
+        cp_volume[tuple(int(round(loc)) for loc in nuclei_centerpoints[i])] =\
+            i+1
+    cp_volume = grey_dilation(cp_volume, (2,2,2))  # without results to
+    # missing valid nuclei after transformation
     new_cp_volume = augment.apply_transformation(cp_volume, transformation,
                                                  False)
     new_nuclei_cp = np.zeros((558,3))
-    for i in range(0, 558):
-        b = np.nonzero(new_cp_volume == i+1)
-        try:
-            new_nuclei_cp[i] = b
-        except:
-            continue
+    for i in valid_nuclei:
+        new_nuclei_cp[i] = np.average(np.nonzero(new_cp_volume==i+1), axis=1)
+    # # Above code performs almost the same (ms better) compared to list
+    # # comprehension)
+    # new_nuclei_cp = np.vstack([
+    #     np.average(np.nonzero(new_cp_volume==i+1), axis=1)
+    #     if i in valid_nuclei else np.array([0,0,0])
+    #     for i in range(558)])
 
     return new_nuclei_cp
 

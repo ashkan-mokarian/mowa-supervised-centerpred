@@ -28,7 +28,8 @@ from utils.elastic_augment import create_elastic_transformation
 from utils.elastic_augment import \
     apply_transformation_to_points_with_transforming_to_volume as \
         apply_transformation_to_points
-from utils.data import normalize_standardize_raw, normalize_standardize_nuclei_center
+from utils.data import normalize_standardize_raw, \
+    normalize_standardize_aligned_worm_center_points
 from utils.general import set_logger
 
 logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def _read_normalize_standardize_input_from_file(file):
     except Exception as e:
         logging.error(e)
     raw = normalize_standardize_raw(raw)
-    nuclei_center = normalize_standardize_nuclei_center(nuclei_center)
+    nuclei_center = normalize_standardize_aligned_worm_center_points(nuclei_center)
     return {'raw': raw, 'gt_universe_aligned_nuclei_center': nuclei_center}
 
 
@@ -73,6 +74,7 @@ def _augment(inputs):
     nuclei_center_projected = np.multiply(nuclei_center_projected,
                                           np.array([1./1166, 1./140, 1./140]))
     nuclei_center_projected = np.reshape(nuclei_center_projected, (-1,))
+    assert not np.any(np.isnan(nuclei_center_projected))
     inputs['gt_universe_aligned_nuclei_center'] = nuclei_center_projected
 
     # Intensity Augment
@@ -97,7 +99,7 @@ def input_fn(files, is_training, batch_size=1):
             datagen,
             {'raw': tf.float32, 'gt_universe_aligned_nuclei_center':
                 tf.float32},
-            {'raw': (1, 140, 140, 1166),
+            {'raw': (1, 1166, 140, 140),
              'gt_universe_aligned_nuclei_center': (1674,)})
         ds = ds.batch(batch_size)
         ds = ds.prefetch(1)
@@ -109,7 +111,7 @@ def input_fn(files, is_training, batch_size=1):
 
 if __name__ == '__main__':
     set_logger('./output/train.log', logging.DEBUG)
-    # train_data, train_data_init_op = input_fn('./data/train', True, 1)
+    # train_data, train_data_init_op = input_fn('./data1/train', True, 1)
     # i = 0
     # with tf.Session() as s:
     #     s.run(train_data_init_op)
@@ -124,8 +126,9 @@ if __name__ == '__main__':
 
     datagen = DataGen('./data/train', True)
     i=0
-    for el in datagen:
+    el = iter(datagen)
+    for _ in range(10):
         start = time.time()
-        print(el['raw'].shape)
+        print(next(el)['raw'].shape)
         print(time.time()- start)
 

@@ -45,6 +45,11 @@ def main(dataset_dir, output_dir):
 
         raw = to_array(original_file).astype(np.uint8)
         labels = to_array(labels_file).astype(np.uint16)
+        # raw and label data dimensions are [140, 140, 1166] but I usually
+        # tend to look at the image in the [1166, 140, 140] so reverse the
+        # order
+        raw = np.moveaxis(raw, [0,1,2], [2,1,0])
+        labels = np.moveaxis(labels, [0, 1, 2], [2, 1, 0])
 
         # zyx = np.indices(raw.shape)
         # x = zyx[2]
