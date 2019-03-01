@@ -104,17 +104,17 @@ def apply_transformation_to_points_with_transforming_to_volume(
             i+1
     cp_volume = grey_dilation(cp_volume, (2,2,2))  # without results to
     # missing valid nuclei after transformation
-    new_cp_volume = augment.apply_transformation(cp_volume, transformation,
-                                                 False)
-    new_nuclei_cp = np.zeros((558,3))
-    for i in valid_nuclei:
-        new_nuclei_cp[i] = np.average(np.nonzero(new_cp_volume==i+1), axis=1)
-    # # Above code performs almost the same (ms better) compared to list
-    # # comprehension)
-    # new_nuclei_cp = np.vstack([
-    #     np.average(np.nonzero(new_cp_volume==i+1), axis=1)
-    #     if i in valid_nuclei else np.array([0,0,0])
-    #     for i in range(558)])
+    new_cp_volume = augment.apply_transformation(cp_volume, transformation, False)
+    new_nuclei_cp = np.vstack([
+        np.average(np.nonzero(new_cp_volume==i+1), axis=1)
+        if i in valid_nuclei else np.array([0,0,0])
+        for i in range(558)])
+
+    # func = partial(mpfunc, new_cp_volume, valid_nuclei)
+    # with concurrent.futures.ProcessPoolExecutor() as executor:
+    #     new_nuclei_cp = np.vstack(
+    #         list(executor.map(func , range(558)))
+    #         )
 
     return new_nuclei_cp
 

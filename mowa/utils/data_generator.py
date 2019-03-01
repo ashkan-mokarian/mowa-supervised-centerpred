@@ -9,7 +9,7 @@ logging.getLogger(__name__)
 class GeneratorForTfData:
     """Base class for data generator to pass to tf...from_generator
 
-    Implicitely assumes several porperties, such as self.list :(
+    Implicitly assumes several porperties, such as self.list :(
     Subclass must implement create_list(), provide_data(el), and call super(
     ).__init__(is_training) at the end of its __init__()
     """
@@ -62,9 +62,6 @@ class GeneratorFromFileList(GeneratorForTfData):
             assert all([os.path.isfile(s) for s in data_dir_or_file_list]), \
                 'Some of the files do not exist'
             return data_dir_or_file_list
-
-    def provide_data(self, file):
-        raise NotImplementedError
 
 
 if __name__ == '__main__':
