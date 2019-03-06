@@ -16,7 +16,7 @@ def normalize_standardize_raw(raw):
     return standardized_raw
 
 
-def normalize_aligned_worm_center_points(points):
+def normalize_aligned_worm_nuclei_center_points(points):
     reshaped = False
     received_shape = points.shape
     if received_shape == (1674,):
@@ -30,20 +30,22 @@ def normalize_aligned_worm_center_points(points):
     return normalized_points
 
 
-def normalize_standardize_aligned_worm_center_points(points):
-    normalized_nuclei_center = normalize_aligned_worm_center_points(points)
+def normalize_standardize_aligned_worm_nuclei_center_points(points):
+    normalized_nuclei_center = normalize_aligned_worm_nuclei_center_points(
+        points)
     standardized_nuclei_center = np.reshape(
         normalized_nuclei_center, (-1,))
     return standardized_nuclei_center
 
 
 def get_list_of_files(data_dir_or_file_list):
-    if isinstance(data_dir_or_file_list, str):
-        assert os.path.isdir(data_dir_or_file_list), \
-            'dir:{} is not a valid path'.format(data_dir_or_file_list)
-        return [os.path.join(data_dir_or_file_list, s) for s in
-                os.listdir(data_dir_or_file_list)]
-    else:
-        assert all([os.path.isfile(s) for s in data_dir_or_file_list]), \
-            'Some of the files do not exist'
-        return data_dir_or_file_list
+    only_files_list = []
+    if not isinstance(data_dir_or_file_list, list):
+        data_dir_or_file_list = [data_dir_or_file_list]
+    for s in data_dir_or_file_list:
+        assert os.path.isfile(s) or os.path.isdir(s)
+        if os.path.isfile(s):
+            only_files_list.append(s)
+        else:
+            only_files_list.extend([os.path.join(s, f) for f in os.listdir(s)])
+    return only_files_list

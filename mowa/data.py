@@ -15,6 +15,13 @@ Goals:
     for a single sample, be it raw data or gt.
 
     TODO: there is seed settings in GeneratorEnqueuer. set when fixing seed
+    TODO: One big issue here, is that generator needs to be controlled from
+    outside, since no way of reinitializing for test val data
+
+    CHANGE: moving on from tf.data implementation since no way of
+    reinitializing, and also stopping the processes spawned by
+    GeneratorEnqueuer from tf.data api. Hence, go with generator and feed_dict
+    approach
 """
 import math
 import random
@@ -27,13 +34,12 @@ import tensorflow as tf
 import augment
 from tensorflow.python.keras.utils.data_utils import GeneratorEnqueuer
 
-from mowa.utils.data_generator import GeneratorFromFileList
 from mowa.utils.elastic_augment import create_elastic_transformation
 from mowa.utils.elastic_augment import \
     apply_transformation_to_points_with_transforming_to_volume as \
-        apply_transformation_to_points
+    apply_transformation_to_points
 from mowa.utils.data import normalize_standardize_raw, \
-    normalize_standardize_aligned_worm_center_points, get_list_of_files
+    normalize_standardize_aligned_worm_nuclei_center_points, get_list_of_files
 from mowa.utils.general import set_logger
 
 logging.getLogger(__name__)
@@ -48,7 +54,8 @@ def _read_normalize_standardize_input_from_file(file):
     except Exception as e:
         logging.error(e)
     raw = normalize_standardize_raw(raw)
-    nuclei_center = normalize_standardize_aligned_worm_center_points(nuclei_center)
+    nuclei_center = normalize_standardize_aligned_worm_nuclei_center_points(
+        nuclei_center)
     return {'raw': raw, 'gt_universe_aligned_nuclei_center': nuclei_center}
 
 
@@ -87,11 +94,10 @@ def _augment(inputs):
     return inputs
 
 
-def data_generator(files, is_training):
+def input_generator(files, is_training):
     files = get_list_of_files(files)
-    lenlist = len(files)
     while True:
-        indxs = list(range(lenlist))
+        indxs = list(range(len(files)))
         random.shuffle(indxs)
         for i in indxs:
             file = files[i]
@@ -103,42 +109,84 @@ def data_generator(files, is_training):
             yield inputs
 
 
-def input_fn(files, is_training, batch_size=1, num_workers=20, cache_size=40):
-    datagen_func = data_generator(files, is_training)
-    datagen_precached = GeneratorEnqueuer(datagen_func,
-                                          use_multiprocessing=True)
-    datagen_precached.start(workers=num_workers, max_queue_size=cache_size)
-    datagen = datagen_precached.get
+# Not useful, because:
+#   - no straightforward way to reinitialize tf.data. useful for evaluation
+#   data, when one needs to run it only once and reinitialize for the next
+#   round, workaround is to create a tf.data (with the accordingly graph ops)
+#   every time which is not efficient.
+#   - no way of killing the subprocesses created by the GeneratorEnqueuer
+#   from withing the tf.Data op. or at least not a straightforward api for
+#   cleaning up
+def input_fn_TF_DATA(files, is_training, batch_size=1, num_workers=20,
+                cache_size=40):
+    if is_training is False:
+        assert num_workers == 1, 'Fow now, stupidly, input_fn cannot handle ' \
+            'multiprocessing, but also no need to be multiprocessing for ' \
+            'evaluation since no augmenetation'
+    inputgen_func = input_generator(files, is_training)
+    inputgen_precached = GeneratorEnqueuer(inputgen_func, use_multiprocessing=True)
+    inputgen_precached.start(workers=num_workers, max_queue_size=cache_size)
+    inputgen = inputgen_precached.get
     with tf.device('CPU:0'):
         ds = tf.data.Dataset.from_generator(
-            datagen,
+            inputgen,
             {'raw': tf.float32, 'gt_universe_aligned_nuclei_center':
                 tf.float32},
             {'raw': (1, 1166, 140, 140),
              'gt_universe_aligned_nuclei_center': (1674,)})
         ds = ds.batch(batch_size)
         ds = ds.prefetch(1)
-        it = ds.make_initializable_iterator()
-        data_init_op = it.initializer
+        # it = ds.make_initializable_iterator()  # Bcuz reinitializing no
+        # # effect with no access to initializing the GeneratorEnqueuer
+        # data_init_op = it.initializer
+        it = ds.make_one_shot_iterator()
         el = it.get_next()
-    return el, data_init_op
+    return el
+
+
+def input_fn(files, is_training, batch_size=1, num_workers=20, cache_size=40):
+    """Provides an infinite loop input generator, returns the iter object to
+    call next(iter) upon, together with the Enqueuer object which handles the
+    multiprocessing, precaching side. So make sure to manually turn that off by
+    calling.GeneratorEnqueuer.stop() after work is done with generator
+
+    Returns:
+        input_batched_generator (Generator func),
+        finisher (partial function) to kill generated subprocesses
+    """
+    if is_training is False:
+        assert num_workers == 1, 'Fow now, stupidly, input_fn cannot handle ' \
+            'multiprocessing, but also no need to be multiprocessing for ' \
+            'evaluation since no augmenetation'
+    inputgen_func = input_generator(files, is_training)
+    inputgen_precached = GeneratorEnqueuer(inputgen_func, use_multiprocessing=True)
+    inputgen_precached.start(workers=num_workers, max_queue_size=cache_size)
+    single_input_gen = inputgen_precached.get()
+
+    def input_batched_gen():
+        while True:
+            list_single_input = [next(single_input_gen) for _ in range(batch_size)]
+            yield {
+                k: np.vstack([np.expand_dims(si[k], axis=0)
+                              for si in list_single_input])
+                for k in list_single_input[0].keys()}
+
+    def terminator():
+        inputgen_precached.stop()
+
+    return input_batched_gen(), terminator
 
 
 if __name__ == '__main__':
-    # set_logger('./output/train.log', logging.DEBUG)
-    # datagen = DataGen('./data/train', True)
-    # i=0
-    # el = iter(datagen)
-    # for _ in range(10):
-    #     start = time.time()
-    #     print(next(el)['raw'].shape)
-    #     print(time.time()- start)
-
-    datagen = data_generator('./data/train', True)
-    dg = GeneratorEnqueuer(datagen, use_multiprocessing=True, wait_time=0)
-    dg.start(10, 20)
-    it = dg.get()
-    while True:
-        t =time.time()
-        i = next(it)
-        print(time.time()-t, ' : ', i['raw'].shape)
+    inp, terminator = input_fn('./data/train', True, batch_size=2)
+    for _ in range(5):
+        el = next(inp)
+        print('hi')
+    for _ in range(10):
+        print('before')
+        time.sleep(1)
+    terminator()
+    for _ in range(10):
+        print('after')
+        time.sleep(1)
+    print('FINISHED!!!')

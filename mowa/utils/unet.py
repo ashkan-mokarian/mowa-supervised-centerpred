@@ -1,4 +1,8 @@
+import logging
+
 import tensorflow as tf
+
+logging.getLogger(__name__)
 
 
 def conv_pass(
@@ -138,8 +142,8 @@ def unet(
         layer: Used internally to build the U-Net recursively.
     """
     prefix = "    "*layer
-    print(prefix + "Creating U-Net layer %i"%layer)
-    print(prefix + "f_in: " + str(fmaps_in.shape))
+    logging.info(prefix + "Creating U-Net layer %i"%layer)
+    logging.info(prefix + "f_in: " + str(fmaps_in.shape))
 
     # convolve
     f_left = conv_pass(
@@ -153,8 +157,8 @@ def unet(
     # last layer does not recurse
     bottom_layer = (layer == len(downsample_factors))
     if bottom_layer:
-        print(prefix + "bottom layer")
-        print(prefix + "f_out: " + str(f_left.shape))
+        logging.info(prefix + "bottom layer")
+        logging.info(prefix + "f_out: " + str(f_left.shape))
         return f_left
 
     # downsample
@@ -171,7 +175,7 @@ def unet(
         downsample_factors=downsample_factors,
         activation=activation,
         layer=layer+1)
-    print(prefix + "g_out: " + str(g_out.shape))
+    logging.info(prefix + "g_out: " + str(g_out.shape))
 
     # upsample
     g_out_upsampled = upsample(
@@ -180,15 +184,15 @@ def unet(
         num_fmaps,
         activation=activation,
         name='unet_up_%i_to_%i'%(layer + 1, layer))
-    print(prefix + "g_out_upsampled: " + str(g_out_upsampled.shape))
+    logging.info(prefix + "g_out_upsampled: " + str(g_out_upsampled.shape))
 
     # copy-crop
     f_left_cropped = crop_zyx(f_left, g_out_upsampled.get_shape().as_list())
-    print(prefix + "f_left_cropped: " + str(f_left_cropped.shape))
+    logging.info(prefix + "f_left_cropped: " + str(f_left_cropped.shape))
 
     # concatenate along channel dimension
     f_right = tf.concat([f_left_cropped, g_out_upsampled], 1)
-    print(prefix + "f_right: " + str(f_right.shape))
+    logging.info(prefix + "f_right: " + str(f_right.shape))
 
     # convolve
     f_out = conv_pass(
@@ -197,7 +201,7 @@ def unet(
         num_fmaps=num_fmaps,
         num_repetitions=2,
         name='unet_layer_%i_right'%layer)
-    print(prefix + "f_out: " + str(f_out.shape))
+    logging.info(prefix + "f_out: " + str(f_out.shape))
 
     return f_out
 
