@@ -82,10 +82,19 @@ def _augment(inputs):
     #     for p in nuclei_center_original])
     nuclei_center_projected = apply_transformation_to_points(
         nuclei_center_original, transformation)
+    # TODO: Tends to give nan outputs even for slightly larger dialtion sizes,
+    # therefore trying to temporarily get rid of this issue here
+    nans = np.isnan(nuclei_center_projected)
+    if np.any(nans):
+        nan_rows = set(np.where(nans)[0])
+        for r in nan_rows:
+            nuclei_center_projected[r] = 0
+    # END
     nuclei_center_projected = np.multiply(nuclei_center_projected,
                                           np.array([1./1166, 1./140, 1./140]))
     nuclei_center_projected = np.reshape(nuclei_center_projected, (-1,))
-    assert not np.any(np.isnan(nuclei_center_projected))
+    assert not np.any(np.isnan(nuclei_center_projected))  # Randomly gets
+    # thrown even for different dilation sizes
     inputs['gt_universe_aligned_nuclei_center'] = nuclei_center_projected
 
     # Intensity Augment

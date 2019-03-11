@@ -5,19 +5,22 @@ import numpy as np
 import os
 import skimage.io as io
 
-# Fixed train/test split
+# Fixed train/test/val split
 test_dataset_worm_names = [
     'cnd1threeL1_1229063',
     'hlh1fourL1_0417078',
     'mir61L1_1228062',
-    'mir61L1_1229062',
     'pha4B2L1_0125072',
-    'pha4I2L_0408071',
+    'pha4I2L_0408071'
+    ]
+
+val_dataset_worm_names = [
+    'mir61L1_1229062',
     'pha4I2L_0408072',
     'pha4I2L_0408073',
     'unc54L1_0123071',
     'unc54L1_0123072'
-]
+    ]
 
 
 def to_array(filename):
@@ -110,6 +113,8 @@ def main(dataset_dir, output_dir):
         # train test split, based on fixed list
         if wormname in test_dataset_worm_names:
             hdf_savepath = os.path.join(output_dir, 'test')
+        elif wormname in val_dataset_worm_names:
+            hdf_savepath = os.path.join(output_dir, 'val')
         else:
             hdf_savepath = os.path.join(output_dir, 'train')
 
@@ -165,6 +170,7 @@ if __name__ == '__main__':
         os.makedirs(output_dir)
         os.makedirs(os.path.join(output_dir, 'train'))
         os.makedirs(os.path.join(output_dir, 'test'))
+        os.makedirs(os.path.join(output_dir, 'val'))
         main(dataset_dir, output_dir)
         print("INFO: Finished Consolidate.py. Results are written to %s" % output_dir)
     else:

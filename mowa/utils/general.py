@@ -56,7 +56,7 @@ def set_logger(log_path, log_level=logging.INFO):
 
         # Logging to console
         stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(logging.Formatter('%(message)s'))
+        stream_handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
         logger.addHandler(stream_handler)
 
 
