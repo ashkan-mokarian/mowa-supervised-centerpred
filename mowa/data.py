@@ -107,7 +107,8 @@ def input_generator(files, is_training):
     files = get_list_of_files(files)
     while True:
         indxs = list(range(len(files)))
-        random.shuffle(indxs)
+        if is_training:
+            random.shuffle(indxs)
         for i in indxs:
             file = files[i]
 

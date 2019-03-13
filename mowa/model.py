@@ -1,6 +1,6 @@
 """TODO: the following aspects are not considered, or even ruled out:
     - Currently using L2 activity regularizer on code with weight 0.01,
-    is this even wanted? what about the weight coefficient?
+    is this even wanted? what about the coefficient?
     - using activation on code, but not on output?
     - not doing any batch normalization, but batching is supported as part of the code
 
@@ -13,6 +13,8 @@ import numpy as np
 import logging
 
 import mowa.utils.unet as un
+
+logging.getLogger(__name__)
 
 
 def model(
@@ -59,7 +61,7 @@ def model(
         code,
         code_length,
         activation=activation,
-        activity_regularizer=tf.contrib.layers.l2_regularizer(0.01),
+        activity_regularizer=tf.contrib.layers.l2_regularizer(0.00001),
         name='code_dense')
 
     # Nuclei info, e.g. center, radii, reconstruction, layers
@@ -83,8 +85,7 @@ def model(
         bias_initializer=initilizer_op,
         kernel_regularizer=tf.contrib.layers.l2_regularizer(0.01))
 
-    logging.info('Finished')
-    print('      f_out: ' + str(f_out.shape))
+    logging.info('      f_out: ' + str(f_out.shape))
     return f_out
 
 
@@ -117,9 +118,12 @@ def custom_malahanobis_loss(y_true, y_pred):
 
     final_weight = tf.multiply(malahanobis_weight_batched, is_gt_weight)
 
-    loss = tf.losses.mean_squared_error(y_true, y_pred, final_weight)
-    loss *= 3  # for the 3 coordinates x, y, z, bcuz otherwise loss
+    loss = tf.losses.mean_squared_error(y_true, y_pred, final_weight,
+                                        loss_collection=None)
+    loss = tf.multiply(3.0, loss, name='malahanobis_loss')
+    # for the 3 coordinates x, y, z, bcuz otherwise loss
                # represents average over dims
+    tf.losses.add_loss(loss)
     return loss
 
 
@@ -157,40 +161,55 @@ def _test_model():
     print(output_sample.shape)
 
 
-def model_fn(inputs):
-    """Model function defining the graph operation
+def model_fn(inputs, is_training):
+    """function defining the graph operation
 
     Args:
-        inputs (dict): contains the inputs of the graph (raw, nuclei_centers)
-            this can be `tf.placeholder` or outputs of `tf.data`
+        inputs (dict): either direct tf.data or placeholders
+        is_training (bool):
+
+    Returns:
+        model_spec (dict): contains the graph operations or nodes for
+        training / evaluation
     """
     raw_batch = inputs['raw']
-    gt_output_batch = inputs['gt_universe_aligned_nuclei_centers']
+    gt_output_batch = inputs['gt_universe_aligned_nuclei_center']
 
     # ---------------------------------------
-    # MODEL: define the layers of the model
+    # MODEL
     with tf.variable_scope('model'):
         output_batch = model(raw_batch,
               12, 5,
-              [[2, 2, 2], [2, 2, 2], [2, 2, 2]])
+              [[2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]])
 
-    # Define loss and accuracy
-    loss = custom_malahanobis_loss(gt_output_batch, output_batch)
+    # LOSS and possibly other metrics to keep track of
+    with tf.variable_scope('data_loss'):
+        loss = custom_malahanobis_loss(gt_output_batch, output_batch)
     # accuracy = ...
 
-    # Define training step that minimizes the loss with Adam
-    optimizer = tf.train.AdamOptimizer()
-    global_step = tf.train.get_or_create_global_step()
-    train_op = optimizer.minimize(loss)
+    # TRAINING OP, Define training step that minimizes the loss with Adam
+    if is_training:
+        with tf.name_scope('optimizer'):
+            global_step = tf.train.get_or_create_global_step()
+            optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+            grads_and_vars = optimizer.compute_gradients(tf.losses.get_total_loss())
+            train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
+            # train_op = optimizer.minimize(
+            #     tf.losses.get_total_loss(),
+            #     global_step=global_step)
 
     # --------------------------------------
     # METRICS and SUMMARIES
 
     # Metrics for evaluation using tf.metrics (average over whole dataset
     with tf.variable_scope('metrics'):
-        metrics = {
-            'loss': tf.metrics.mean(loss)
-            }
+        metrics = dict()
+        metrics.update({'eval_average_epoch_loss/'+l.name: tf.metrics.mean(l)
+                        for l in tf.losses.get_losses()})
+        metrics.update({'eval_average_epoch_loss/'+l.name: tf.metrics.mean(l)
+                        for l in tf.losses.get_regularization_losses()})
+        metrics.update({'eval_average_epoch_loss/'+'total_loss':
+            tf.metrics.mean(tf.losses.get_total_loss())})
 
     # Group the update ops for the tf.metrics
     update_metrics_op = tf.group(*[op for _, op in metrics.values()])
@@ -201,23 +220,48 @@ def model_fn(inputs):
     metrics_init_op = tf.variables_initializer(metric_variables)
 
     # Summaries for training
-    tf.summary.scalar('loss', loss)
-    # tf.summary.image ...
+    with tf.name_scope('summary'):
+        train_summaries = []
+        for l in tf.losses.get_losses():
+            train_summaries.append(tf.summary.scalar(l.name, l,
+                                                     family='train_loss'))
+        for l in tf.losses.get_regularization_losses():
+            train_summaries.append(tf.summary.scalar(l.name, l,
+                                                     family='train_loss'))
+        train_summaries.append(tf.summary.scalar(
+            'total_loss', tf.losses.get_total_loss(), family='train_loss'))
+
+        # also adding histogram of gradients and histogram of variables
+        # In one of the experiments: adding histogram increased training
+        # speed from 3.27 s/it to 4.38 s/it
+        histogram_summaries = []
+        histogram_summaries.extend(
+            [tf.summary.histogram(g[1].name, g[1], family='train_var')
+             for g in grads_and_vars])
+        histogram_summaries.extend(
+            [tf.summary.histogram('{}-grad'.format(g[1].name), g[0], family='train_gradients')
+             for g in grads_and_vars])
+
+        train_summaries.extend(histogram_summaries)
 
     # --------------------------------------
     # MODEL SPECIFICATION
     # Create the model specification and return it
     # It contains nodes or operations in the graph that will be used for
     # training and evaluation
-    model_spec = inputs
+    model_spec = inputs  # use inputs in case its needed to snapshot everything
+    model_spec['global_step'] = tf.train.get_global_step()
     model_spec['variable_init_op'] = tf.global_variables_initializer()
-    model_spec['outputs'] = output_batch
-    model_spec['loss'] = loss
+    model_spec['output'] = output_batch
+    model_spec['loss'] = tf.losses.get_total_loss()
     model_spec['metrics_init_op'] = metrics_init_op
     model_spec['metrics'] = metrics
     model_spec['update_metrics'] = update_metrics_op
+    model_spec['train_summary_op'] = tf.summary.merge(train_summaries)
     model_spec['summary_op'] = tf.summary.merge_all()
-    model_spec['train_op'] = train_op
+    model_spec['best_model_metric'] = metrics['eval_average_epoch_loss/total_loss'][0]
+    if is_training:
+        model_spec['train_op'] = train_op
 
     return model_spec
 
