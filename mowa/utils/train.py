@@ -98,3 +98,27 @@ def eval_one_epoch(sess, model, feed_dict_lambda, epoch_size, data_generator,
     metrics_string)
 
     return best_model_metric
+
+
+def snapshot_one_epoch(sess, model, feed_dict_lambda, epoch_size,
+                       data_generator, logging_starting_text):
+    return_list = []
+    start = time.time()
+    for i in range(epoch_size):
+        data = next(data_generator)
+        fd = feed_dict_lambda(data)
+        output_batch_val = sess.run(model['output'], feed_dict=fd)
+        # Assume always shape[0] of key `files` represents batch_size
+        files = data.pop('file')
+        batch_size = files.shape[0]
+        for i in range(batch_size):
+            sample_dict = {}
+            sample_dict['file'] = files[i][0]
+            # sample_dict['input'] = {k: v[i] for k, v in data.items()}
+            sample_dict['output'] = output_batch_val[i]
+            return_list.append(sample_dict)
+    logging.info(logging_starting_text + ' - in total took: {:.2f}s'.format(
+        time.time()-start))
+    return return_list
+
+

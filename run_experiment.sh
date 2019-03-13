@@ -2,7 +2,7 @@
 
 # Settings
 num_epochs=1000
-gpu_vis_devices="1"
+gpu_vis_devices="0"
 virtual_environment="/home/ashkan/.virtualenvs/mowa/bin/activate"
 
 # script assumes data, output, mowa, folders already exist

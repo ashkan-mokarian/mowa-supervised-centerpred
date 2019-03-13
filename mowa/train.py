@@ -1,5 +1,6 @@
 import logging
 import os
+import pickle
 import sys
 
 import tensorflow as tf
@@ -7,25 +8,45 @@ import numpy as np
 
 from mowa.model import model_fn
 from mowa.data import input_fn
-from mowa.utils.train import train_one_epoch, eval_one_epoch
+from mowa.utils.train import train_one_epoch, eval_one_epoch, snapshot_one_epoch
 
 logging.getLogger(__name__)
 
-# in number of epochs
+# DEBUG PARAMETERS
 _TRAIN_SIZE = 20
 _VAL_SIZE = 5
 _TEST_SIZE = 5
 
 _TRAIN_SUMMARY_PERIOD = 21  # in terms of global step
-_EVALUATION_PERIOD = 10  # Frequency of writing summaries and running evaluation
-_CHECKPOINT_PERIOD = 10
+_EVALUATION_PERIOD = 2  # Frequency of writing summaries and running evaluation
+_CHECKPOINT_PERIOD = 1
+_SNAPSHOT_PERIOD = 1  # do a full complete snapshot at the specified epoch,
+# implemented after checkpointing so usually good idea to give it the same value
 
-_EARLY_STOP_PATIENCE = 20000000  # Disabled for now
-_LET_WARM_START = 10  # number of epochs, bcuz life gets hell to
+_EARLY_STOP_PATIENCE = 20000000  #  IN TERMS OF EVALUATION PERIOD. Disabled for
+# now
+_WARMUP_PERIOD = 0  # number of epochs, bcuz life gets hell to
 # zoom in and out in tensorbboard and in the beginning, too noisy
-_BEST_MODEL_PATIENCE = 10  # since learning rate is usually low, it pays off
+_BEST_MODEL_PATIENCE = 2  # IN TERMS OF NUMBER EVALUATION IS CARRIED ON. since
+# learning rate is
+# usually low, it pays off
 # to wait some number of epochs before saving best model, yeah, could get a
-# litttle off, but pays off for not saving too frequently
+# litttle off, but pays off for not saving too frequently.
+
+
+# # ACTUAL PARAMETERS
+# _TRAIN_SIZE = 20
+# _VAL_SIZE = 5
+# _TEST_SIZE = 5
+#
+# _TRAIN_SUMMARY_PERIOD = 21
+# _EVALUATION_PERIOD = 20
+# _CHECKPOINT_PERIOD = 100
+# _SNAPSHOT_PERIOD = 100
+#
+# _EARLY_STOP_PATIENCE = 20000000
+# _WARMUP_PERIOD = 50
+# _BEST_MODEL_PATIENCE = 2
 
 
 def train(max_epoch=1000, output_dir='./output'):
@@ -78,7 +99,9 @@ def train(max_epoch=1000, output_dir='./output'):
     last_best_evaluation_metric = np.inf
     best_model_lag_counter = 0
 
-    # HOOKS
+    snapshot_path = os.path.join(output_dir, 'snapshot')
+    if not os.path.exists(snapshot_path):
+        os.makedirs(snapshot_path)
 
     config = tf.ConfigProto()
     # config.gpu_options.allow_growth = True
@@ -92,8 +115,8 @@ def train(max_epoch=1000, output_dir='./output'):
     with tf.Session(config=config) as sess:
         sess.run(model['variable_init_op'])
 
-        if os.path.isdir(model_ckpt_path):
-            restore_from = tf.train.latest_checkpoint(model_ckpt_path)
+        restore_from = tf.train.latest_checkpoint(model_ckpt_path)
+        if restore_from:
             begin_epoch = int(restore_from.split('-')[-1])
             logging.info('Restoring parameters from:`{}`, iteration:`{}`'.format(
                 restore_from, begin_epoch))
@@ -109,9 +132,9 @@ def train(max_epoch=1000, output_dir='./output'):
 
         for epoch in range(begin_epoch, max_epoch):
 
-            # prewarm the model at least for some steps, then start
+            # warmup the model at least for some steps, then start
             # evaluation, early-stopping, summaries, etc
-            if epoch<_LET_WARM_START:
+            if epoch<_WARMUP_PERIOD:
                 train_one_epoch(sess, model, feed_dict_lambda,
                                 epoch_size=_TRAIN_SIZE,
                                 data_generator=train_inputs,
@@ -121,7 +144,7 @@ def train(max_epoch=1000, output_dir='./output'):
                                 train_summary_freq_in_global_steps=100000000)
                 continue
 
-            # always train
+            # TRAIN always train
             train_one_epoch(sess, model, feed_dict_lambda,
                             epoch_size=_TRAIN_SIZE,
                             data_generator=train_inputs,
@@ -129,7 +152,7 @@ def train(max_epoch=1000, output_dir='./output'):
                             logging_starting_text='epoch:{:d}'.format(epoch),
                             train_summary_freq_in_global_steps=_TRAIN_SUMMARY_PERIOD)
 
-            # sometimes evaluate
+            # EVALUATE sometimes
             if (epoch+1) % _EVALUATION_PERIOD == 0:
                 # VALIDATION DATA
                 current_best_evaluation_metric = eval_one_epoch(
@@ -162,11 +185,24 @@ def train(max_epoch=1000, output_dir='./output'):
                     logging_starting_text='[eval-Train]')
 
                 # BEST MODEL SAVING
+                best_model_lag_counter += 1
                 if current_best_evaluation_metric < last_best_evaluation_metric:
                     logging.debug('new best model metric - previous:{}, new:{}'.format(
                         last_best_evaluation_metric, current_best_evaluation_metric))
                     best_model_lag_counter = 0
                     last_best_evaluation_metric = current_best_evaluation_metric
+
+                if best_model_lag_counter == _BEST_MODEL_PATIENCE:
+                    logging.debug('best_model_lag_counter=%d' % best_model_lag_counter)
+                    logging.info('BEST checkpointing model at epoch={}'.format(
+                        epoch + 1))
+                    best_saver.save(sess, best_save_path, global_step=epoch + 1)
+
+                if best_model_lag_counter > _EARLY_STOP_PATIENCE:
+                    logging.info(
+                        'early stopping at epoch:{}, with best_loss:{}'.
+                        format(epoch + 1, last_best_evaluation_metric))
+                    break
 
             # -----------------------------------------
             # CHECKPOINT
@@ -175,14 +211,36 @@ def train(max_epoch=1000, output_dir='./output'):
                 logging.info('checkpointing model at epoch={}'.format(epoch+1))
                 last_saver.save(sess, last_save_path, global_step=epoch+1)
 
-            if best_model_lag_counter == _BEST_MODEL_PATIENCE:
-                logging.info('BEST checkpointing model at epoch={}'.format(epoch + 1))
-                best_saver.save(sess, best_save_path, global_step=epoch + 1)
-
-            if best_model_lag_counter > _EARLY_STOP_PATIENCE:
-                logging.info('early stopping at epoch:{}, with best_loss:{}'.
-                             format(epoch + 1, last_best_evaluation_metric))
-                break
+            # Do a snapshot of output of the model and file name
+            # tried snapshotting everything, one snapshot was 10 GB,
+            # even with gzip too large and took ages to write
+            # format of snapshots
+            # [{'file': file,
+            #   'outputs': model_spec['output_batch']}]
+            if (epoch+1) % _SNAPSHOT_PERIOD == 0:
+                snapshot_list = []
+                snapshot_file = os.path.join(snapshot_path, 'snapshot-{}.pkl'.
+                                             format(epoch+1))
+                snapshot_list.extend(
+                    snapshot_one_epoch(
+                    sess, model, feed_dict_lambda,
+                    epoch_size=_TRAIN_SIZE,
+                    data_generator=eval_train_inputs,
+                    logging_starting_text='[SNAPSHOT-train]'))
+                snapshot_list.extend(
+                    snapshot_one_epoch(
+                    sess, model, feed_dict_lambda,
+                    epoch_size=_VAL_SIZE,
+                    data_generator=val_inputs,
+                    logging_starting_text='[SNAPSHOT-val]'))
+                snapshot_list.extend(
+                    snapshot_one_epoch(
+                    sess, model, feed_dict_lambda,
+                    epoch_size=_TEST_SIZE,
+                    data_generator=test_inputs,
+                    logging_starting_text='[SNAPSHOT-test]'))
+                with open(snapshot_file, 'wb') as f:
+                    pickle.dump(snapshot_list, f)
 
         # Yeah, looks terrible, but subprocesses need to be killed in the end
         train_inputs_terminator()

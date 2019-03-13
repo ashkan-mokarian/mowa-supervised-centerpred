@@ -191,6 +191,7 @@ def model_fn(inputs, is_training):
     if is_training:
         with tf.name_scope('optimizer'):
             global_step = tf.train.get_or_create_global_step()
+
             optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
             grads_and_vars = optimizer.compute_gradients(tf.losses.get_total_loss())
             train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)

@@ -56,7 +56,9 @@ def _read_normalize_standardize_input_from_file(file):
     raw = normalize_standardize_raw(raw)
     nuclei_center = normalize_standardize_aligned_worm_nuclei_center_points(
         nuclei_center)
-    return {'raw': raw, 'gt_universe_aligned_nuclei_center': nuclei_center}
+    # always include 'file' since snapshotting requires this
+    return {'raw': raw, 'gt_universe_aligned_nuclei_center': nuclei_center,
+            'file': file}
 
 
 def _augment(inputs):
