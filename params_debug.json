@@ -1,0 +1,16 @@
+{
+    "train_size": 20,
+    "val_size": 5,
+    "test_size": 5,
+
+    "train_summary_period": 21,
+    "evaluation_period": 2,
+    "checkpoint_period": 5,
+    "snapshot_period": 5,
+
+    "early_stop_patience": 20000000,
+    "warmup_period": 1,
+    "best_model_patience": 2,
+
+    "max_epoch": 12
+}

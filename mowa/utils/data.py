@@ -20,7 +20,7 @@ def normalize_aligned_worm_nuclei_center_points(points):
     reshaped = False
     received_shape = points.shape
     if received_shape == (1674,):
-        points.reshape(received_shape)
+        points = points.reshape((558, 3))
         reshaped = True
     assert points.shape == (558, 3)
     normalized_points = np.multiply(points, np.array([1.0 / 1166, 1.0 / 140,

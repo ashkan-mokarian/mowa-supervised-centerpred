@@ -13,6 +13,7 @@ import numpy as np
 import logging
 
 import mowa.utils.unet as un
+from mowa.utils.data import normalize_aligned_worm_nuclei_center_points
 
 logging.getLogger(__name__)
 
@@ -77,13 +78,16 @@ def model(
     with h5py.File(initializer_wormfile, 'r') as f:
         initializer_array = np.reshape(
             f['.']['matrix/universe_aligned_nuclei_centers'],
-            (-1,)).tolist()
+            (-1,))
+        initializer_array = normalize_aligned_worm_nuclei_center_points(
+            initializer_array).tolist()
     initilizer_op = tf.constant_initializer(value=initializer_array)
     f_out = tf.layers.dense(
         code,
         558*3,
         bias_initializer=initilizer_op,
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(0.01))
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(0.01),
+        name='output')
 
     logging.info('      f_out: ' + str(f_out.shape))
     return f_out
@@ -265,4 +269,3 @@ def model_fn(inputs, is_training):
         model_spec['train_op'] = train_op
 
     return model_spec
-

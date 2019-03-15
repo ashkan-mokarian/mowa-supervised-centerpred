@@ -33,6 +33,9 @@ class Params():
         """Gives dict-like access to Params instance by `params.dict['learning_rate']`"""
         return self.__dict__
 
+    def __repr__(self):
+        return '; '.join('{}: {}'.format(k, v) for k, v in self.__dict__.items())
+
 
 def set_logger(log_path, log_level=logging.INFO):
     """Sets the logger to log info in terminal and file `log_path`.

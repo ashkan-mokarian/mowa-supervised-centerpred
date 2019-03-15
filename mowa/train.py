@@ -9,47 +9,44 @@ import numpy as np
 from mowa.model import model_fn
 from mowa.data import input_fn
 from mowa.utils.train import train_one_epoch, eval_one_epoch, snapshot_one_epoch
+from mowa.utils.general import Params
 
 logging.getLogger(__name__)
 
-# DEBUG PARAMETERS
-_TRAIN_SIZE = 20
-_VAL_SIZE = 5
-_TEST_SIZE = 5
 
-_TRAIN_SUMMARY_PERIOD = 21  # in terms of global step
-_EVALUATION_PERIOD = 2  # Frequency of writing summaries and running evaluation
-_CHECKPOINT_PERIOD = 1
-_SNAPSHOT_PERIOD = 1  # do a full complete snapshot at the specified epoch,
-# implemented after checkpointing so usually good idea to give it the same value
+def train(output_dir='./output', params=None):
 
-_EARLY_STOP_PATIENCE = 20000000  #  IN TERMS OF EVALUATION PERIOD. Disabled for
-# now
-_WARMUP_PERIOD = 0  # number of epochs, bcuz life gets hell to
-# zoom in and out in tensorbboard and in the beginning, too noisy
-_BEST_MODEL_PATIENCE = 2  # IN TERMS OF NUMBER EVALUATION IS CARRIED ON. since
-# learning rate is
-# usually low, it pays off
-# to wait some number of epochs before saving best model, yeah, could get a
-# litttle off, but pays off for not saving too frequently.
+    max_epoch = params.max_epoch
 
+    # For now, to make it work with the params settings, do this here,
+    # but later make according changes maybe
+    _TRAIN_SIZE = params.train_size
+    _VAL_SIZE = params.val_size
+    _TEST_SIZE = params.test_size
 
-# # ACTUAL PARAMETERS
-# _TRAIN_SIZE = 20
-# _VAL_SIZE = 5
-# _TEST_SIZE = 5
-#
-# _TRAIN_SUMMARY_PERIOD = 21
-# _EVALUATION_PERIOD = 20
-# _CHECKPOINT_PERIOD = 100
-# _SNAPSHOT_PERIOD = 100
-#
-# _EARLY_STOP_PATIENCE = 20000000
-# _WARMUP_PERIOD = 50
-# _BEST_MODEL_PATIENCE = 2
+    _TRAIN_SUMMARY_PERIOD = params.train_summary_period  # in terms of global
+    # step
+    _EVALUATION_PERIOD = params.evaluation_period  # Frequency of writing
+    # summaries and running evaluation
+    _CHECKPOINT_PERIOD = params.checkpoint_period
+    _SNAPSHOT_PERIOD = params.snapshot_period  # do a full complete snapshot at
+    # the
+    # specified epoch,
+    # implemented after checkpointing so usually good idea to give it the same value
 
-
-def train(max_epoch=1000, output_dir='./output'):
+    _EARLY_STOP_PATIENCE = params.early_stop_patience  # IN TERMS OF EVALUATION
+    # PERIOD. Disabled for
+    # now
+    _WARMUP_PERIOD = params.warmup_period  # number of epochs, bcuz life gets
+    # hell to
+    # zoom in and out in tensorbboard and in the beginning, too noisy
+    _BEST_MODEL_PATIENCE = params.best_model_patience  # IN TERMS OF NUMBER
+    # EVALUATION IS CARRIED ON. since
+    # learning rate is
+    # usually low, it pays off
+    # to wait some number of epochs before saving best model, yeah, could get a
+    # litttle off, but pays off for not saving too frequently.
+    logging.info(params)
 
     # MODEL
     # =============================================
@@ -255,7 +252,10 @@ def train(max_epoch=1000, output_dir='./output'):
 if __name__ == '__main__':
     # set_logger('./output/output.log', log_level=logging.DEBUG)
     logging.basicConfig(level=logging.DEBUG)
-    max_steps = int(sys.argv[1])
-    train(max_steps)
+    params_file = './params.json'
+    if len(sys.argv) > 1 and sys.argv[1] == '-d':
+        params_file = './params_debug.json'
+    params = Params(params_file)
+    train(params=params)
 
     logging.info('FINISHED!!!')
