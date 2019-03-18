@@ -250,12 +250,10 @@ def train(output_dir='./output', params=None):
 
 
 if __name__ == '__main__':
-    # set_logger('./output/output.log', log_level=logging.DEBUG)
     logging.basicConfig(level=logging.DEBUG)
-    params_file = './params.json'
+    params = Params('./params.json')
     if len(sys.argv) > 1 and sys.argv[1] == '-d':
-        params_file = './params_debug.json'
-    params = Params(params_file)
+        params.update('./params_debug.json')
     train(params=params)
 
     logging.info('FINISHED!!!')

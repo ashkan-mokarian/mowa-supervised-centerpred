@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 # Settings
-num_epochs=1000
 gpu_vis_devices="0"
 virtual_environment="/home/ashkan/.virtualenvs/mowa/bin/activate"
 
@@ -21,7 +20,7 @@ export PYTHONPATH=$PYTHONPATH:$projectdir/mowa
 # Run training
 echo Starting training
 CUDA_VISIBLE_DEVICES=${gpu_vis_devices} \
-    python mowa/train.py $num_epochs \
+    python mowa/train.py \
     2>&1 | tee ./output/train.log
 #
 #echo Starting evaluation

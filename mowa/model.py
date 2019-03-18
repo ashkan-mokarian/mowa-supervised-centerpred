@@ -62,7 +62,7 @@ def model(
         code,
         code_length,
         activation=activation,
-        activity_regularizer=tf.contrib.layers.l2_regularizer(0.00001),
+        activity_regularizer=tf.contrib.layers.l2_regularizer(1.0),
         name='code_dense')
 
     # Nuclei info, e.g. center, radii, reconstruction, layers
@@ -86,7 +86,7 @@ def model(
         code,
         558*3,
         bias_initializer=initilizer_op,
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(0.01),
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0),
         name='output')
 
     logging.info('      f_out: ' + str(f_out.shape))
@@ -196,7 +196,7 @@ def model_fn(inputs, is_training):
         with tf.name_scope('optimizer'):
             global_step = tf.train.get_or_create_global_step()
 
-            optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+            optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
             grads_and_vars = optimizer.compute_gradients(tf.losses.get_total_loss())
             train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
             # train_op = optimizer.minimize(
