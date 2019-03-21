@@ -18,6 +18,7 @@ ln -s $data_dir data
 cp -a $projectdir/mowa/. ./mowa/
 cp $projectdir/*.sh ./
 cp $projectdir/params.json ./
+cp $projectdir/model_description.txt ./
 
 echo Go and run it manually, first check parameters in run_experiment.sh
 

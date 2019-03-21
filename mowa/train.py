@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import pickle
@@ -15,6 +16,7 @@ logging.getLogger(__name__)
 
 
 def train(output_dir='./output', params=None):
+    epoch_temp = 0
 
     max_epoch = params.max_epoch
 
@@ -94,6 +96,16 @@ def train(output_dir='./output', params=None):
     if not os.path.exists(os.path.join(model_ckpt_path, 'best_weights')):
         os.makedirs(os.path.join(model_ckpt_path, 'best_weights'))
     last_best_evaluation_metric = np.inf
+    # initialize last_best_evaluation_metric (in case the experiment is
+    # rerunning so that the last best_weights save stays the best)
+    if os.path.exists('./output/ckpt/best_weights/last_best_evaluation_metric'
+                      '.json'):
+        with open(
+                './output/ckpt/best_weights/last_best_evaluation_metric'
+                '.json', 'r') as f:
+            last_best_evaluation_metric = json.load(f)[
+                'last_best_evaluation_metric']
+
     best_model_lag_counter = 0
 
     snapshot_path = os.path.join(output_dir, 'snapshot')
@@ -112,12 +124,15 @@ def train(output_dir='./output', params=None):
     with tf.Session(config=config) as sess:
         sess.run(model['variable_init_op'])
 
+
+
         restore_from = tf.train.latest_checkpoint(model_ckpt_path)
         if restore_from:
             begin_epoch = int(restore_from.split('-')[-1])
             logging.info('Restoring parameters from:`{}`, iteration:`{}`'.format(
                 restore_from, begin_epoch))
             last_saver.restore(sess, restore_from)
+            epoch_temp = begin_epoch
 
         # Tensorboard
         train_writer = tf.summary.FileWriter(os.path.join(
@@ -128,7 +143,7 @@ def train(output_dir='./output', params=None):
             output_dir, 'tblogs', 'test'))
 
         for epoch in range(begin_epoch, max_epoch):
-
+            epoch_temp = epoch+1
             # warmup the model at least for some steps, then start
             # evaluation, early-stopping, summaries, etc
             if epoch<_WARMUP_PERIOD:
@@ -141,7 +156,7 @@ def train(output_dir='./output', params=None):
                                 train_summary_freq_in_global_steps=100000000)
                 continue
 
-            # TRAIN always train
+            # TRAIN always
             train_one_epoch(sess, model, feed_dict_lambda,
                             epoch_size=_TRAIN_SIZE,
                             data_generator=train_inputs,
@@ -188,6 +203,12 @@ def train(output_dir='./output', params=None):
                         last_best_evaluation_metric, current_best_evaluation_metric))
                     best_model_lag_counter = 0
                     last_best_evaluation_metric = current_best_evaluation_metric
+                    # Save the new best model metric
+                    with open(
+                            './output/ckpt/best_weights/last_best_evaluation_metric'
+                            '.json', 'w') as f:
+                        json.dump({
+                            'last_best_evaluation_metric':last_best_evaluation_metric})
 
                 if best_model_lag_counter == _BEST_MODEL_PATIENCE:
                     logging.debug('best_model_lag_counter=%d' % best_model_lag_counter)
@@ -238,6 +259,46 @@ def train(output_dir='./output', params=None):
                     logging_starting_text='[SNAPSHOT-test]'))
                 with open(snapshot_file, 'wb') as f:
                     pickle.dump(snapshot_list, f)
+
+        # BEST SNAPSHOTTING
+        # In the end of training, save a best snapshot, which is either the
+        # last epoch or the best saved model
+        restore_best = tf.train.latest_checkpoint(best_save_path)
+        if restore_best:
+            logging.debug('Found best model at: ' + restore_best)
+            epoch_temp = int(restore_best.split('-')[-1])
+            best_saver.restore(sess, restore_best)
+        # otherwise, leave it as it is since last epoch is best one
+        snapshot_list = []
+        snapshot_file = os.path.join(snapshot_path, 'best', 'best-snapshot-{'
+                                                            '}.pkl'.
+                                     format(epoch_temp))
+        # Delete if any previous best snapshot exists
+        if not os.path.exists(os.path.join(snapshot_path, 'best')):
+            os.makedirs(os.path.join(snapshot_path, 'best'))
+        if not len(os.listdir(os.path.join(snapshot_path, 'best')))==0:
+            for f in os.listdir(os.path.join(snapshot_path, 'best')):
+                os.remove(os.path.join(snapshot_path, 'best', f))
+        snapshot_list.extend(
+            snapshot_one_epoch(
+                sess, model, feed_dict_lambda,
+                epoch_size=_TRAIN_SIZE,
+                data_generator=eval_train_inputs,
+                logging_starting_text='[SNAPSHOT-train]'))
+        snapshot_list.extend(
+            snapshot_one_epoch(
+                sess, model, feed_dict_lambda,
+                epoch_size=_VAL_SIZE,
+                data_generator=val_inputs,
+                logging_starting_text='[SNAPSHOT-val]'))
+        snapshot_list.extend(
+            snapshot_one_epoch(
+                sess, model, feed_dict_lambda,
+                epoch_size=_TEST_SIZE,
+                data_generator=test_inputs,
+                logging_starting_text='[SNAPSHOT-test]'))
+        with open(snapshot_file, 'wb') as f:
+            pickle.dump(snapshot_list, f)
 
         # Yeah, looks terrible, but subprocesses need to be killed in the end
         train_inputs_terminator()

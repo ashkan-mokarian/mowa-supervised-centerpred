@@ -38,6 +38,26 @@ def normalize_standardize_aligned_worm_nuclei_center_points(points):
     return standardized_nuclei_center
 
 
+def undo_normalize_standardize_aligned_worm_nuclei_center_points(points):
+    if points.shape == (1674,):
+        points = points.reshape((558, 3))
+    assert points.shape == (558, 3)
+    unnormalized_points = np.multiply(points, np.array([1166., 140., 140.]))
+    return unnormalized_points
+
+
+def xyz_to_volume_indices(xyz_point, clip_out_of_bound_to_edge=True):
+    indices = [int(np.floor(c)) for c in [xyz_point[0], xyz_point[1],
+                                          xyz_point[2]]]
+
+    def clip(val, min_val, max_val):
+        return max(min_val, min(val, max_val))
+    if clip_out_of_bound_to_edge:
+        indices = [clip(indices[0], 0, 1166), clip(indices[1], 0, 140),
+                   clip(indices[2], 0, 140)]
+    return indices
+
+
 def get_list_of_files(data_dir_or_file_list):
     only_files_list = []
     if not isinstance(data_dir_or_file_list, list):

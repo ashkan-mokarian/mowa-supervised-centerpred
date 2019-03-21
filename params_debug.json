@@ -5,5 +5,5 @@
 
     "warmup_period": 1,
 
-    "max_epoch": 12
+    "max_epoch": 13
 }

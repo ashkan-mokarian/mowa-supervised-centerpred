@@ -69,7 +69,7 @@ def model(
     # For now, a dense layer bias init with one of the worms. could be
     # replaced with nuclei reconstruction for example
     initializer_wormfile = \
-        '/home/ashkan/workspace/myCode/MoWA/mowa-nucleicenters-supervised' \
+        '/home/ashkan/workspace/myCode/MoWA/mowa-supervised-centerpred' \
         '/data/train/cnd1threeL1_1228061.hdf'
     logging.info('Creating dense regression layer for centerpoint predictions')
     logging.info('Currently, bias hard-code initialized with the worm found at'
