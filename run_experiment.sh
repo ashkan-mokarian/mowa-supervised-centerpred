@@ -23,10 +23,10 @@ CUDA_VISIBLE_DEVICES=${gpu_vis_devices} \
     python mowa/train.py \
     2>&1 | tee ./output/train.log
 #
-echo Starting evaluation
+echo Starting analysis
 ## Run evaluation afterwards
 #CUDA_VISIBLE_DEVICES=${gpu_vis_devices} \
-python mowa/evaluate.py
+python mowa/analysis.py
 #    >> ./output/eval_log.txt
 
 echo FINISHED!!!

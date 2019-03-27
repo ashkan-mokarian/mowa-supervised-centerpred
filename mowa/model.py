@@ -57,7 +57,11 @@ def model(
     # Code layer
     logging.info('Creating flatten+dense layer for code output')
     logging.info('      f_in: ' + str(fmaps_in.shape))
-    code = tf.layers.flatten(fmaps_in, name='encoder_flatten')
+    # code = tf.layers.flatten(fmaps_in, name='encoder_flatten')
+    # deprecated, use Flatten which uses keras layers instead
+    # Was getting 0 gradients for all the variables except for the last
+    # layer. seems the problem to be data_format='channels_last' WTF
+    code = tf.layers.Flatten(data_format='channels_first')(fmaps_in)
     code = tf.layers.dense(
         code,
         code_length,
@@ -183,7 +187,7 @@ def model_fn(inputs, is_training):
     # MODEL
     with tf.variable_scope('model'):
         output_batch = model(raw_batch,
-              12, 5,
+              6, 2,
               [[2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]])
 
     # LOSS and possibly other metrics to keep track of

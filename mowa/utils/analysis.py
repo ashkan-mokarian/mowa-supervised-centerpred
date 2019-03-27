@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.ndimage import grey_dilation
 
 from mowa.utils.data import undo_normalize_standardize_aligned_worm_nuclei_center_points, xyz_to_volume_indices
 
@@ -43,6 +44,26 @@ def eval_centerpred_hit(pred, labels):
             tps[idx] = 1 * (label == gt_label_at_pred_com)
             fps[idx] = 1 * (label != gt_label_at_pred_com and mask[idx] == 1)
     return tps, fps, mask, out_of_bound
+
+
+def centerpred_to_volume(centerpred, dilation=(0, 0, 0)):
+    centerpred = undo_normalize_standardize_aligned_worm_nuclei_center_points(centerpred)
+    centerpred = [xyz_to_volume_indices(i, False) for i in centerpred]
+    temp_volume = np.zeros((1166, 140, 140))
+
+    # check for valid points, i.e. for gt data, must be nonzero, and for
+    # preds must be in valid rane
+    def is_valid_aligned_index(p):
+        return all(x>=y for x, y in zip(p, (0,0,0))) and \
+            all(x<y for x, y in zip(p, (1166, 140,140)))
+
+    cp_valid_list = [cp for cp in centerpred if is_valid_aligned_index(cp)]
+    cp_valid_indices = tuple(zip(*cp_valid_list))
+    labels = [i+1 for i, cp in enumerate(centerpred) if
+              is_valid_aligned_index(cp)]
+    temp_volume[cp_valid_indices] = labels
+    temp_volume = grey_dilation(temp_volume, dilation)
+    return temp_volume
 
 
 def get_split_data_key_from_path(path):

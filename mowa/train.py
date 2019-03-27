@@ -103,8 +103,8 @@ def train(output_dir='./output', params=None):
         with open(
                 './output/ckpt/best_weights/last_best_evaluation_metric'
                 '.json', 'r') as f:
-            last_best_evaluation_metric = json.load(f)[
-                'last_best_evaluation_metric']
+            last_best_evaluation_metric = float(json.load(f)[
+                'last_best_evaluation_metric'])
 
     best_model_lag_counter = 0
 
@@ -208,7 +208,8 @@ def train(output_dir='./output', params=None):
                             './output/ckpt/best_weights/last_best_evaluation_metric'
                             '.json', 'w') as f:
                         json.dump({
-                            'last_best_evaluation_metric':last_best_evaluation_metric})
+                            'last_best_evaluation_metric':str(
+                                last_best_evaluation_metric)}, f)
 
                 if best_model_lag_counter == _BEST_MODEL_PATIENCE:
                     logging.debug('best_model_lag_counter=%d' % best_model_lag_counter)

@@ -11,7 +11,7 @@ import plotly.tools as tls
 import plotly.offline as py
 import plotly.graph_objs as go
 
-from mowa.utils.evaluate import *
+from mowa.utils.analysis import *
 from mowa.data import input_generator
 
 
