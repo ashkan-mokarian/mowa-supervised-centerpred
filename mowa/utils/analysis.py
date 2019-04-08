@@ -46,10 +46,12 @@ def eval_centerpred_hit(pred, labels):
     return tps, fps, mask, out_of_bound
 
 
-def centerpred_to_volume(centerpred, dilation=(0, 0, 0)):
-    centerpred = undo_normalize_standardize_aligned_worm_nuclei_center_points(centerpred)
+def centerpred_to_volume(centerpred, dilation=(1, 1, 1),
+                            undo_normalize=True):
+    if undo_normalize:
+        centerpred = undo_normalize_standardize_aligned_worm_nuclei_center_points(centerpred)
     centerpred = [xyz_to_volume_indices(i, False) for i in centerpred]
-    temp_volume = np.zeros((1166, 140, 140))
+    temp_volume = np.zeros((1166, 140, 140), dtype=np.uint16)
 
     # check for valid points, i.e. for gt data, must be nonzero, and for
     # preds must be in valid rane

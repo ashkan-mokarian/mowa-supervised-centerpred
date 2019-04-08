@@ -34,6 +34,7 @@ def main(worm_hdf5_file, worm_name, eval_file):
     with h5py.File(worm_hdf5_file, 'r') as f:
         raw = f['.']['volumes/raw'][()]
         labels = f['.']['volumes/universe_aligned_gt_labels'][()]
+        centerpred_labels = f['.']['matrix/universe_aligned_nuclei_centers'][()]
 
     # find the correct center point predictions
     evaldata = pickle.load(open(eval_file, 'rb'))
@@ -41,13 +42,18 @@ def main(worm_hdf5_file, worm_name, eval_file):
         'file']][0]
     centerpreds = np.squeeze(centerpreds)
     # create the actual volume now
-    predsvol = centerpred_to_volume(centerpreds, (3,3,3))
+    centerpreds = np.reshape(centerpreds, [-1,3])
+    predsvol = centerpred_to_volume(centerpreds, (3,3,3), undo_normalize=True)
+    centerpred_labels = centerpred_to_volume(centerpred_labels, (3,3,3),
+                                             undo_normalize=False)
+
 
     viewer = neuroglancer.Viewer()
     with viewer.txn() as s:
         add(s, raw, 'raw')
-        # add(s, labels, 'gt_labels')
-        # add(s, predsvol, 'pred_centerpoints')
+        add(s, labels, 'gt_labels')
+        add(s, centerpred_labels, 'centerpred_labels')
+        add(s, predsvol, 'pred_centerpoints')
         print(viewer)
 # embedding.materialize()
 # mi = np.amin(embedding.data)
@@ -86,9 +92,9 @@ def main(worm_hdf5_file, worm_name, eval_file):
 
 if __name__ == '__main__':
     # INPUTS
-    wormhdf5file = '/home/ashkan/workspace/myCode/MoWA/mowa-supervised-centerpred/data/train/C18G1_2L1_1.hdf'
-    wormname = 'C18G1_2L1_1.hdf'
-    evalfile = '/home/ashkan/workspace/myCode/MoWA/mowa-supervised-centerpred/output/snapshot/snapshot-1000.pkl'
+    wormhdf5file = '/home/ashkan/workspace/myCode/MoWA/mowa-supervised-centerpred/data/train/egl5L1_0606074.hdf'
+    wormname = 'egl5L1_0606074'
+    evalfile = '/home/ashkan/workspace/myCode/MoWA/mowa-supervised-centerpred/experiments/MoWA-lower_loss_values-190329_114825/output/snapshot/best/best-snapshot-300.pkl'
 
     main(wormhdf5file, wormname, evalfile)
 
